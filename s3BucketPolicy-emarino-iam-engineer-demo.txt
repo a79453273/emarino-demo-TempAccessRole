@@ -1,0 +1,27 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "PublicReadIndexOnly",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::emarino-iam-engineer-demo/index.html"
+        },
+        {
+            "Sid": "SpecificAWSFullAccess",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::219373852427:user/emarino",
+                    "arn:aws:iam::219373852427:role/TempAccessRole"
+                ]
+            },
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::emarino-iam-engineer-demo/*",
+                "arn:aws:s3:::emarino-iam-engineer-demo"
+            ]
+        }
+    ]
+}

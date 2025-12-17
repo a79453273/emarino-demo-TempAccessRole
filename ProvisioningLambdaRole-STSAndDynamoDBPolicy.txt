@@ -1,0 +1,49 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sts:AssumeRole",
+                "sts:TagSession"
+            ],
+            "Resource": "arn:aws:iam::219373852427:role/TempAccessRole"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:UpdateItem",
+                "dynamodb:GetItem"
+            ],
+            "Resource": "arn:aws:dynamodb:*:*:table/iam-access-sessions"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "lambda:InvokeFunction"
+            ],
+            "Resource": "arn:aws:lambda:*:*:function:NotificationLambda"
+        },
+        {
+            "Sid": "STSReadOperations",
+            "Effect": "Allow",
+            "Action": [
+                "sts:GetSessionToken",
+                "sts:GetDelegatedAccessToken",
+                "sts:DecodeAuthorizationMessage",
+                "sts:GetWebIdentityToken",
+                "sts:TagGetWebIdentityToken",
+                "sts:GetAccessKeyInfo",
+                "sts:GetCallerIdentity",
+                "sts:GetServiceBearerToken"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "STSUserOperations",
+            "Effect": "Allow",
+            "Action": "sts:*",
+            "Resource": "arn:aws:iam::219373852427:user/*"
+        }
+    ]
+}

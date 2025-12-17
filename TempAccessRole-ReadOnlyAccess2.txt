@@ -1,0 +1,31 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:Describe*",
+                "dynamodb:List*",
+                "dynamodb:GetItem",
+                "dynamodb:Query",
+                "dynamodb:Scan",
+                "lambda:Get*",
+                "lambda:List*",
+                "iam:Get*",
+                "iam:List*",
+                "sns:Get*",
+                "sns:List*",
+                "s3:Get*",
+                "s3:List*",
+                "apigateway:GET",
+                "events:Describe*",
+                "events:List*",
+                "sts:GetCallerIdentity",
+                "logs:Describe*",
+                "logs:Get*",
+                "logs:FilterLogEvents"
+            ],
+            "Resource": "arn:aws:iam::*:role/TempAccessRole"
+        }
+    ]
+}

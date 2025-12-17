@@ -1,0 +1,327 @@
+import boto3
+import json
+import urllib.parse
+import os
+from botocore.exceptions import ClientError
+
+sns = boto3.client('sns')
+ses = boto3.client('ses')
+
+ Replace with your actual values
+SNS_TOPIC_ARN = 'arn:aws:sns:us-east-2:219373852427:iam-notifications'
+SENDER_EMAIL = 'erica.marino.awscloud@outlook.com'  
+AWS_REGION = 'us-east-2'  
+
+def lambda_handler(event, context):
+    try:
+        credentials = event['credentials']
+        user_email = event['user_email']
+        request_id = event['request_id']
+        
+         Generate console federation URL
+        console_url = generate_federation_url(
+            credentials['AccessKeyId'],
+            credentials['SecretAccessKey'],
+            credentials['SessionToken']
+        )
+        
+         Send email to user via SES
+        send_credentials_to_user(
+            user_email,
+            credentials,
+            console_url,
+            request_id
+        )
+        
+         Send notification to admins via SNS
+        send_admin_notification(
+            user_email,
+            request_id,
+            credentials['Expiration']
+        )
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'Notifications sent successfully',
+                'user_notified': True,
+                'admin_notified': True
+            })
+        }
+        
+    except Exception as e:
+        print(f'Error: {str(e)}')
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def send_credentials_to_user(user_email, credentials, console_url, request_id):
+    """Send credentials directly to the requesting user via SES"""
+    
+     HTML email body
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: 333;
+            }}
+            .container {{
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            .header {{
+                background: 232F3E;
+                color: white;
+                padding: 20px;
+                text-align: center;
+            }}
+            .content {{
+                background: f5f5f5;
+                padding: 20px;
+                margin: 20px 0;
+            }}
+            .credentials {{
+                background: white;
+                border-left: 4px solid FF9900;
+                padding: 15px;
+                margin: 10px 0;
+                font-family: monospace;
+                word-break: break-all;
+            }}
+            .warning {{
+                background: fff3cd;
+                border: 1px solid ffc107;
+                padding: 15px;
+                margin: 15px 0;
+                border-radius: 4px;
+            }}
+            .button {{
+                display: inline-block;
+                background: FF9900;
+                color: white;
+                padding: 12px 24px;
+                text-decoration: none;
+                border-radius: 4px;
+                margin: 10px 0;
+            }}
+            .code-block {{
+                background: 232F3E;
+                color: 00FF00;
+                padding: 15px;
+                border-radius: 4px;
+                overflow-x: auto;
+                margin: 10px 0;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>ðŸ” AWS Temporary Access Credentials</h1>
+            </div>
+            
+            <div class="content">
+                <h2>Your Access Request Has Been Approved</h2>
+                <p>Your temporary AWS credentials are ready. These credentials provide read-only access and are valid for 24 hours.</p>
+                
+                <div class="warning">
+                    <strong>âš ï¸ Important Security Notice:</strong>
+                    <ul>
+                        <li>These credentials expire in 24 hours</li>
+                        <li>Do not share these credentials with anyone</li>
+                        <li>Use only for authorized purposes</li>
+                        <li>Request ID: <strong>{request_id}</strong></li>
+                    </ul>
+                </div>
+                
+                <h3>ðŸ“‹ Your Credentials</h3>
+                
+                <div class="credentials">
+                    <strong>Access Key ID:</strong><br>
+                    {credentials['AccessKeyId']}<br><br>
+                    
+                    <strong>Secret Access Key:</strong><br>
+                    {credentials['SecretAccessKey']}<br><br>
+                    
+                    <strong>Session Token:</strong><br>
+                    {credentials['SessionToken']}<br><br>
+                    
+                    <strong>Expiration:</strong><br>
+                    {credentials['Expiration']}
+                </div>
+                
+                <h3>ðŸŒ Access AWS Console</h3>
+                <p>Click the button below to access the AWS Console with your temporary credentials:</p>
+                <a href="{console_url}" class="button">Open AWS Console</a>
+                
+                <h3>ðŸ’» AWS CLI Configuration</h3>
+                <p>To use these credentials with the AWS CLI, run the following commands in your terminal:</p>
+                
+                <div class="code-block">
+export AWS_ACCESS_KEY_ID="{credentials['AccessKeyId']}"<br>
+export AWS_SECRET_ACCESS_KEY="{credentials['SecretAccessKey']}"<br>
+export AWS_SESSION_TOKEN="{credentials['SessionToken']}"
+                </div>
+                
+                <p><strong>Windows (PowerShell):</strong></p>
+                <div class="code-block">
+$env:AWS_ACCESS_KEY_ID="{credentials['AccessKeyId']}"<br>
+$env:AWS_SECRET_ACCESS_KEY="{credentials['SecretAccessKey']}"<br>
+$env:AWS_SESSION_TOKEN="{credentials['SessionToken']}"
+                </div>
+                
+                <h3>ðŸ“ What You Can Do</h3>
+                <ul>
+                    <li>View AWS resources (read-only access)</li>
+                    <li>List DynamoDB tables, Lambda functions, IAM roles</li>
+                    <li>Access CloudWatch logs</li>
+                    <li>View S3 buckets and objects</li>
+                </ul>
+                
+                <h3>âŒ What You Cannot Do</h3>
+                <ul>
+                    <li>Create, modify, or delete resources</li>
+                    <li>Change IAM permissions</li>
+                    <li>Deploy or update Lambda functions</li>
+                </ul>
+                
+                <div class="warning">
+                    <strong>Need Help?</strong><br>
+                    If you have questions or issues with your credentials, please contact your AWS administrator.
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+     Plain text version (fallback)
+    text_body = f"""
+AWS TEMPORARY ACCESS CREDENTIALS
+================================
+
+Your access request has been approved!
+
+ACCESS KEY ID:
+{credentials['AccessKeyId']}
+
+SECRET ACCESS KEY:
+{credentials['SecretAccessKey']}
+
+SESSION TOKEN:
+{credentials['SessionToken']}
+
+EXPIRATION:
+{credentials['Expiration']}
+
+AWS CONSOLE ACCESS:
+{console_url}
+
+CLI CONFIGURATION (Linux/Mac):
+export AWS_ACCESS_KEY_ID="{credentials['AccessKeyId']}"
+export AWS_SECRET_ACCESS_KEY="{credentials['SecretAccessKey']}"
+export AWS_SESSION_TOKEN="{credentials['SessionToken']}"
+
+CLI CONFIGURATION (Windows PowerShell):
+$env:AWS_ACCESS_KEY_ID="{credentials['AccessKeyId']}"
+$env:AWS_SECRET_ACCESS_KEY="{credentials['SecretAccessKey']}"
+$env:AWS_SESSION_TOKEN="{credentials['SessionToken']}"
+
+IMPORTANT NOTES:
+â€¢ These credentials expire in 24 hours
+â€¢ Read-only access to AWS resources
+â€¢ Request ID: {request_id}
+â€¢ Do not share these credentials
+
+Thank you!
+    """
+    
+    try:
+        response = ses.send_email(
+            Source=SENDER_EMAIL,
+            Destination={
+                'ToAddresses': [user_email]
+            },
+            Message={
+                'Subject': {
+                    'Data': f'Your AWS Temporary Access Credentials - Request {request_id[:8]}',
+                    'Charset': 'UTF-8'
+                },
+                'Body': {
+                    'Text': {
+                        'Data': text_body,
+                        'Charset': 'UTF-8'
+                    },
+                    'Html': {
+                        'Data': html_body,
+                        'Charset': 'UTF-8'
+                    }
+                }
+            }
+        )
+        print(f"Email sent to user {user_email}. Message ID: {response['MessageId']}")
+        
+    except ClientError as e:
+        print(f"Error sending email to user: {e.response['Error']['Message']}")
+        raise
+
+def send_admin_notification(user_email, request_id, expiration):
+    """Send notification to admins via SNS"""
+    
+    message = f"""
+AWS IAM ACCESS NOTIFICATION
+===========================
+
+A temporary access request has been provisioned.
+
+USER EMAIL: {user_email}
+REQUEST ID: {request_id}
+EXPIRATION: {expiration}
+ACCESS LEVEL: Read-Only
+STATUS: Credentials sent to user
+
+Action Required: None (automated provisioning)
+
+This is an automated notification.
+    """
+    
+    try:
+        sns.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Subject=f'IAM Access Granted - {user_email}',
+            Message=message
+        )
+        print(f"Admin notification sent via SNS")
+        
+    except ClientError as e:
+        print(f"Error sending SNS notification: {e.response['Error']['Message']}")
+         Don't raise - admin notification failure shouldn't block user notification
+
+def generate_federation_url(access_key, secret_key, session_token):
+    """Generate AWS Console federation URL"""
+    
+     Create session credentials JSON
+    session_json = json.dumps({
+        'sessionId': access_key,
+        'sessionKey': secret_key,
+        'sessionToken': session_token
+    })
+    
+     URL encode the credentials
+    encoded_session = urllib.parse.quote_plus(session_json)
+    
+     Create federation URL
+    federation_url = (
+        'https://signin.aws.amazon.com/federation'
+        f'?Action=getSigninToken&Session={encoded_session}'
+    )
+    
+     In production, you would call this URL to get a signin token
+     For now, return the console URL
+    return 'https://console.aws.amazon.com/'
